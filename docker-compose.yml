@@ -1,0 +1,20 @@
+# 一次性執行（由主機 cron 觸發）：docker compose run --rm backup
+services:
+  backup:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MONGO_TOOLS: "${INSTALL_MONGO_TOOLS:-false}"
+    image: python-backup:latest
+    env_file:
+      - .env
+    # 備份主機上的資料庫（127.0.0.1）時使用 host 網路；備份其他容器時改為加入該容器的 network
+    network_mode: host
+    volumes:
+      - ./conf:/app/conf:ro
+      - ./logs:/app/logs
+      - ./data:/app/data
+      - ./rclone:/config/rclone            # rclone.conf（UPLOADER=rclone）
+      # files 類型：把要備份的路徑唯讀掛載進來，[job:*] paths 填容器內路徑
+      # - /data/app:/data/app:ro

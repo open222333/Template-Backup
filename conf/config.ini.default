@@ -1,0 +1,78 @@
+[LOG]
+; 設定紀錄log等級 DEBUG,INFO,WARNING,ERROR,CRITICAL 預設 INFO
+; LOG_LEVEL=INFO
+
+[BACKUP]
+; 通知標題中的名稱（例如主機名）
+BACKUP_NAME=backup
+; 本機備份目錄（相對專案根目錄），每個 job 一個子目錄
+BACKUP_DIR=data/backups
+; 預設保留份數（job 可用 keep_local / keep_remote 覆寫；0 = 不刪除）
+KEEP_LOCAL=7
+KEEP_REMOTE=30
+
+[UPLOAD]
+; none / rclone / s3
+UPLOADER=none
+; rclone：remote 名稱與路徑（先執行 rclone config 建立），例如 b2:my-bucket/backups
+RCLONE_REMOTE=
+RCLONE_EXTRA_ARGS=
+; s3：金鑰用環境變數 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+S3_BUCKET=
+S3_PREFIX=backups
+; S3 相容服務（MinIO、R2…）填 endpoint；AWS 留空
+S3_ENDPOINT_URL=
+
+[NOTIFY]
+; console,telegram,mail
+NOTIFY_CHANNELS=console
+; always / failure / never
+NOTIFY_ON=always
+
+[TELEGRAM]
+; Token 請用環境變數 TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID=
+
+[MAIL]
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SSL=false
+SMTP_USER=
+; 密碼請用環境變數 SMTP_PASSWORD
+MAIL_FROM=
+MAIL_TO=
+
+; ── 備份 job：每個 [job:<名稱>] 一項 ──
+; 共通：type = files / mysql / postgres / mongo、enabled、keep_local、keep_remote
+; 機密不寫在這裡：password_env / uri_env 填「環境變數名稱」
+
+[job:app_files]
+type=files
+paths=/data/app/uploads,/data/app/conf
+exclude=*.log,*.tmp,node_modules,__pycache__
+
+[job:mysql_main]
+type=mysql
+host=127.0.0.1
+port=3306
+user=backup
+password_env=MYSQL_BACKUP_PASSWORD
+; 逗號分隔；留空 = 全部資料庫
+databases=
+enabled=false
+
+[job:pg_main]
+type=postgres
+host=127.0.0.1
+port=5432
+user=backup
+password_env=PG_BACKUP_PASSWORD
+database=app
+enabled=false
+
+[job:mongo_main]
+type=mongo
+uri_env=MONGO_BACKUP_URI
+; 留空 = 全部資料庫
+db=
+enabled=false

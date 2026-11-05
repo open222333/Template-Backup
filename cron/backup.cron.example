@@ -1,0 +1,9 @@
+# 複製到 crontab -e，路徑改成實際專案位置
+# 每天 03:17 執行全部備份
+17 3 * * * cd /opt/backup && docker compose run --rm backup >> logs/cron.log 2>&1
+
+# 每小時備份單一 job
+# 5 * * * * cd /opt/backup && docker compose run --rm backup backup mysql_main >> logs/cron.log 2>&1
+
+# 不使用 Docker 時
+# 17 3 * * * cd /opt/backup && .venv/bin/python -m src backup >> logs/cron.log 2>&1
