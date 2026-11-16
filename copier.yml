@@ -1,0 +1,56 @@
+# copier 設定：由此模板建立新專案
+#   copier copy --trust gh:open222333/Template-Backup <新專案目錄>
+#   cd <新專案目錄> && copier update --trust     # 模板更新後同步（需模板有版本 tag）
+# 模板本身保持可直接執行（不改成 .jinja），建立專案後由 _tasks 替換名稱、port 等寫死的值；
+# 因為有 _tasks，copier 需要加 --trust。
+_min_copier_version: "9.0.0"
+_answers_file: .copier-answers.yml
+_exclude:
+  - copier.yml
+  - .git
+  - .DS_Store
+  - "~*"
+  - "*.py[co]"
+  - __pycache__
+  - .pytest_cache
+  - .venv
+  - venv
+  - node_modules
+  - dist
+_message_after_copy: |
+  已建立 {{ project_name }}。
+  下一步：cd {{ _copier_conf.dst_path }}，依 README「基於此模板建立新專案」複製設定檔（*.default）後執行。
+  模板更新後可執行：copier update --trust
+
+project_name:
+  type: str
+  help: 專案名稱（小寫英數字與 -，會用在 README 標題、docker image 名稱）
+  default: "{{ _copier_conf.dst_path.name | lower | replace(' ', '-') | replace('_', '-') }}"
+  validator: >-
+    {% if not project_name %}必填{% elif project_name != project_name | lower or ' ' in project_name %}請用小寫、不含空白，例如 my-finance{% endif %}
+
+description:
+  type: str
+  help: 一句話說明（README 開頭）
+  default: "Python 備份模板"
+
+_tasks:
+  - - "{{ _copier_python }}"
+    - "-c"
+    - &replace |
+      import sys, pathlib
+      path, *pairs = sys.argv[1:]
+      p = pathlib.Path(path)
+      if p.exists():
+          text = p.read_text(encoding="utf-8")
+          for old, new in zip(pairs[::2], pairs[1::2]):
+              text = text.replace(old, new)
+          p.write_text(text, encoding="utf-8")
+    - "README.md"
+    - "# Template-Backup"
+    - "# {{ project_name }}"
+    - "Template-Backup/\n"
+    - "{{ project_name }}/\n"
+    - "Python 備份模板"
+    - "{{ description }}"
+  - ["{{ _copier_python }}", "-c", *replace, "docker-compose.yml", "image: python-backup:latest", "image: {{ project_name }}:latest"]

@@ -48,6 +48,21 @@ Template-Backup/
 
 ## 基於此模板建立新專案
 
+### 用 copier 建立（建議）
+
+會詢問專案名稱、port 等並自動替換；之後模板有更新可用 `copier update` 同步。
+
+```bash
+pipx install copier
+copier copy --trust gh:open222333/Template-Backup your-new-project
+cd your-new-project && git init
+
+# 模板更新後（模板需打版本 tag，例如 v1.1.0）
+copier update --trust
+```
+
+### 手動建立
+
 ```bash
 git clone <此模板 URL> your-new-project
 cd your-new-project
