@@ -2,6 +2,7 @@ import hashlib
 import os
 import re
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 
 TS_FORMAT = '%Y%m%d-%H%M%S'
@@ -49,30 +50,35 @@ def human_size(n: float) -> str:
     return f'{n:.1f} PB'
 
 
+def _read_err(f) -> str:
+    f.seek(0)
+    return f.read()[-4000:].decode(errors='replace').strip()   # 只保留結尾，避免訊息過長
+
+
 def run_pipeline(cmd: list[str], out_path: str, env: dict[str, str] | None = None,
                  gzip_output: bool = False) -> None:
     """執行指令並把 stdout 寫入檔案（可選 gzip）。失敗時刪除不完整檔案並拋出例外。
 
     密碼一律經 env 傳入，不放在 cmd（避免出現在 ps / log）。
+    stderr 寫入暫存檔而不是 PIPE：指令輸出大量錯誤訊息時，PIPE 緩衝區滿了會讓程序互相等待而卡死。
     """
     full_env = {**os.environ, **(env or {})}
     try:
-        with open(out_path, 'wb') as out:
+        with open(out_path, 'wb') as out, tempfile.TemporaryFile() as err1, tempfile.TemporaryFile() as err2:
             if gzip_output:
-                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=full_env)
-                p2 = subprocess.Popen(['gzip', '-c'], stdin=p1.stdout, stdout=out, stderr=subprocess.PIPE)
-                p1.stdout.close()
-                _, err2 = p2.communicate()
-                err1 = p1.stderr.read()
+                p1 = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err1, env=full_env)
+                p2 = subprocess.Popen(['gzip', '-c'], stdin=p1.stdout, stdout=out, stderr=err2)
+                p1.stdout.close()   # 讓 gzip 結束時 p1 能收到 SIGPIPE
+                p2.wait()
                 p1.wait()
                 if p1.returncode != 0:
-                    raise RuntimeError(f'{cmd[0]} 失敗（{p1.returncode}）：{err1.decode(errors="replace").strip()}')
+                    raise RuntimeError(f'{cmd[0]} 失敗（{p1.returncode}）：{_read_err(err1)}')
                 if p2.returncode != 0:
-                    raise RuntimeError(f'gzip 失敗：{err2.decode(errors="replace").strip()}')
+                    raise RuntimeError(f'gzip 失敗：{_read_err(err2)}')
             else:
-                r = subprocess.run(cmd, stdout=out, stderr=subprocess.PIPE, env=full_env)
+                r = subprocess.run(cmd, stdout=out, stderr=err1, env=full_env)
                 if r.returncode != 0:
-                    raise RuntimeError(f'{cmd[0]} 失敗（{r.returncode}）：{r.stderr.decode(errors="replace").strip()}')
+                    raise RuntimeError(f'{cmd[0]} 失敗（{r.returncode}）：{_read_err(err1)}')
     except BaseException:
         if os.path.exists(out_path):
             os.remove(out_path)

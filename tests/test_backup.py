@@ -198,3 +198,27 @@ def test_run_pipeline_gzip_and_failure(tmp_path):
     with pytest.raises(RuntimeError):
         run_pipeline(['sh', '-c', 'echo partial; echo boom >&2; exit 3'], str(bad), gzip_output=True)
     assert not bad.exists()
+
+
+@pytest.mark.parametrize('gzip_output', [True, False])
+def test_run_pipeline_large_stderr_does_not_hang(tmp_path, gzip_output):
+    """dump 指令輸出大量 stderr（超過 PIPE 緩衝區 64 KB）時不可卡死，且錯誤訊息只保留結尾。"""
+    import sys
+    import threading
+    from src.util import run_pipeline
+    script = 'import sys\nsys.stderr.write("x" * 2_000_000)\nsys.stdout.write("data" * 200_000)\nsys.exit(1)'
+    out = tmp_path / 'big.gz'
+    errors = []
+
+    def run():
+        try:
+            run_pipeline([sys.executable, '-c', script], str(out), gzip_output=gzip_output)
+        except RuntimeError as e:
+            errors.append(e)
+
+    t = threading.Thread(target=run, daemon=True)
+    t.start()
+    t.join(timeout=30)
+    assert not t.is_alive(), 'run_pipeline 卡住'
+    assert errors and len(str(errors[0])) < 4200
+    assert not out.exists()
